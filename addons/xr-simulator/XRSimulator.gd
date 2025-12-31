@@ -102,7 +102,9 @@ func _input(event):
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return
 	
-	simulate_joysticks()
+	if Input.is_key_pressed(KEY_SHIFT):
+		simulate_joysticks()
+		
 	var is_any_controller_selected = false
 	if event is InputEventMouseMotion:
 		if Input.is_physical_key_pressed(KEY_Q) or toggle_left_controller:
@@ -149,6 +151,15 @@ func _input(event):
 			simulate_buttons(event, left_controller)
 		if Input.is_physical_key_pressed(KEY_E) or toggle_right_controller:
 			simulate_buttons(event, right_controller)
+			
+func _process(delta: float) -> void:
+	if not enabled or not OS.has_feature("editor"):
+		return
+		
+	if not left_tracker or not right_tracker or not camera:
+		return
+		
+	move_all(delta)
 			
 func camera_height(event: InputEventMouseButton):
 	var direction = -1
@@ -225,6 +236,45 @@ func move_controller(event: InputEventMouseMotion, controller: XRController3D):
 	movement += camera.global_transform.basis.x * event.relative.x * device_x_sensitivity/1000
 	movement += camera.global_transform.basis.y * event.relative.y * -device_y_sensitivity/1000
 	controller.global_translate(movement)
+	
+func move_all(delta: float):
+	var camera_inverse: Transform3D = camera.global_transform.affine_inverse()
+	
+	# Compute relative transforms
+	var left_relative:  Transform3D
+	var right_relative: Transform3D
+	if left_controller:
+		left_relative  = camera_inverse * left_controller.global_transform
+	if right_controller:
+		right_relative = camera_inverse * right_controller.global_transform
+	
+	var pos = camera.transform.origin
+	
+	# Move camera
+	var movement = Vector3()
+	var x: float = 0
+	var y: float = 0
+	if Input.is_physical_key_pressed (KEY_D):
+		x = 1
+	elif Input.is_physical_key_pressed (KEY_A):
+		x = -1
+	if Input.is_physical_key_pressed (KEY_W):
+		y = 1
+	elif Input.is_physical_key_pressed (KEY_S):
+		y = -1
+	
+	movement += camera.global_transform.basis.x * x * device_x_sensitivity * delta
+	movement += camera.global_transform.basis.z * y * -device_x_sensitivity * delta
+	camera.global_translate(movement)
+	
+	if (camera.transform.origin.y >= max_camera_height or camera.transform.origin.y <= min_camera_height) and is_camera_height_limited:
+		camera.transform.origin.y = pos.y
+	
+	# Apply relative transforms
+	if left_controller:
+		left_controller.global_transform  = camera.global_transform * left_relative
+	if right_controller:
+		right_controller.global_transform = camera.global_transform * right_relative
 	
 func attract_controller(event: InputEventMouseButton, controller: XRController3D):
 	if not camera:

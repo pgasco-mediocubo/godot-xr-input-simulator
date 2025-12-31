@@ -14,6 +14,7 @@ https://www.youtube.com/watch?v=wDXnsy2IH1A
 When you play the scene, your cursor will be locked in the screen. Press ``Esc`` whenever you want to release the cursor.
 - Move your mouse to look around
 - Scroll to move the camera up and down
+- Press ``WASD`` to move forward, backward, left and right
 
 ## Joystick controls
 While holding ``Shift``:
