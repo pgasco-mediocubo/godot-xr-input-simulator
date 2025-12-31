@@ -16,6 +16,7 @@ When you play the scene, your cursor will be locked in the screen. Press ``Esc``
 - Scroll to move the camera up and down
 
 ## Joystick controls
+While holding ``Shift``:
 - Press ``WASD`` to move the left controller's joystick
 - Press the arrow keys to move the right controller's joystick
 
