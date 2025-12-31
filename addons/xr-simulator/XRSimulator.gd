@@ -172,28 +172,14 @@ func camera_height(event: InputEventMouseButton):
 	elif event.button_index != MOUSE_BUTTON_WHEEL_DOWN:
 		return
 	
-	var camera_inverse: Transform3D = camera.global_transform.affine_inverse()
-	
-	# Compute relative transforms
-	var left_relative:  Transform3D
-	var right_relative: Transform3D
-	if left_controller:
-		left_relative  = camera_inverse * left_controller.global_transform
-	if right_controller:
-		right_relative = camera_inverse * right_controller.global_transform
+	var lambdaCB = func ():
+		var pos = camera.transform.origin
+		var camera_y = pos.y + (scroll_sensitivity * direction)/20
+		if (camera_y >= max_camera_height or camera_y <= min_camera_height) and is_camera_height_limited:
+			camera_y = pos.y
+		camera.transform.origin = Vector3(pos.x, camera_y , pos.z)
 		
-	# Modify camera height
-	var pos = camera.transform.origin
-	var camera_y = pos.y + (scroll_sensitivity * direction)/20
-	if (camera_y >= max_camera_height or camera_y <= min_camera_height) and is_camera_height_limited:
-		camera_y = pos.y
-	camera.transform.origin = Vector3(pos.x, camera_y , pos.z)
-	
-	# Apply relative transforms
-	if left_controller:
-		left_controller.global_transform  = camera.global_transform * left_relative
-	if right_controller:
-		right_controller.global_transform = camera.global_transform * right_relative
+	controllers_relative_to_camera(lambdaCB)
 
 func simulate_joysticks():
 	var vec_left = vector_key_mapping(KEY_D, KEY_A, KEY_W, KEY_S)
@@ -238,43 +224,30 @@ func move_controller(event: InputEventMouseMotion, controller: XRController3D):
 	controller.global_translate(movement)
 	
 func move_all(delta: float):
-	var camera_inverse: Transform3D = camera.global_transform.affine_inverse()
+	var lambdaCB = func ():
+		var pos = camera.transform.origin
 	
-	# Compute relative transforms
-	var left_relative:  Transform3D
-	var right_relative: Transform3D
-	if left_controller:
-		left_relative  = camera_inverse * left_controller.global_transform
-	if right_controller:
-		right_relative = camera_inverse * right_controller.global_transform
-	
-	var pos = camera.transform.origin
-	
-	# Move camera
-	var movement = Vector3()
-	var x: float = 0
-	var y: float = 0
-	if Input.is_physical_key_pressed (KEY_D):
-		x = 1
-	elif Input.is_physical_key_pressed (KEY_A):
-		x = -1
-	if Input.is_physical_key_pressed (KEY_W):
-		y = 1
-	elif Input.is_physical_key_pressed (KEY_S):
-		y = -1
-	
-	movement += camera.global_transform.basis.x * x * device_x_sensitivity * delta
-	movement += camera.global_transform.basis.z * y * -device_x_sensitivity * delta
-	camera.global_translate(movement)
-	
-	if (camera.transform.origin.y >= max_camera_height or camera.transform.origin.y <= min_camera_height) and is_camera_height_limited:
-		camera.transform.origin.y = pos.y
-	
-	# Apply relative transforms
-	if left_controller:
-		left_controller.global_transform  = camera.global_transform * left_relative
-	if right_controller:
-		right_controller.global_transform = camera.global_transform * right_relative
+		# Move camera
+		var movement = Vector3()
+		var x: float = 0
+		var y: float = 0
+		if Input.is_physical_key_pressed (KEY_D):
+			x = 1
+		elif Input.is_physical_key_pressed (KEY_A):
+			x = -1
+		if Input.is_physical_key_pressed (KEY_W):
+			y = 1
+		elif Input.is_physical_key_pressed (KEY_S):
+			y = -1
+		
+		movement += camera.global_transform.basis.x * x * device_x_sensitivity * delta
+		movement += camera.global_transform.basis.z * y * -device_x_sensitivity * delta
+		camera.global_translate(movement)
+		
+		if (camera.transform.origin.y >= max_camera_height or camera.transform.origin.y <= min_camera_height) and is_camera_height_limited:
+			camera.transform.origin.y = pos.y
+		
+	controllers_relative_to_camera(lambdaCB)
 	
 func attract_controller(event: InputEventMouseButton, controller: XRController3D):
 	if not camera:
@@ -313,26 +286,10 @@ func rotate_device(event: InputEventMouseMotion, device: Node3D):
 	device.rotate(device.transform.basis.x, motion.y * -device_y_sensitivity/1000)
 	
 func rotate_all(event: InputEventMouseMotion):
-	if not camera:
-		return
-	
-	var camera_inverse: Transform3D = camera.global_transform.affine_inverse()
-	
-	# Compute relative transforms
-	var left_relative:  Transform3D
-	var right_relative: Transform3D
-	if left_controller:
-		left_relative  = camera_inverse * left_controller.global_transform
-	if right_controller:
-		right_relative = camera_inverse * right_controller.global_transform
+	var lambdaCB = func ():
+		rotate_device(event, camera)
 		
-	# Rotate camera
-	rotate_device(event, camera)
-	# Apply relative transforms
-	if left_controller:
-		left_controller.global_transform  = camera.global_transform * left_relative
-	if right_controller:
-		right_controller.global_transform = camera.global_transform * right_relative
+	controllers_relative_to_camera(lambdaCB)
 	
 func vector_key_mapping(key_positive_x: int, key_negative_x: int, key_positive_y: int, key_negative_y: int):
 	var x = 0
@@ -353,3 +310,23 @@ func vector_key_mapping(key_positive_x: int, key_negative_x: int, key_positive_y
 		vec = vec.normalized()
 	
 	return vec
+	
+func get_relative_transform(inverse: Transform3D, node: Node3D) -> Transform3D:
+	return inverse * node.global_transform
+	
+func apply_relative_transform(dst: Node3D, src: Node3D, relative_transform: Transform3D) -> void:
+	dst.global_transform = src.global_transform * relative_transform
+	
+func controllers_relative_to_camera(camera_transform_CB: Callable) -> void:
+	var camera_inverse: Transform3D = camera.global_transform.affine_inverse()
+	
+	# Compute relative transforms
+	var left_relative:  Transform3D = get_relative_transform(camera_inverse, left_controller)
+	var right_relative: Transform3D = get_relative_transform(camera_inverse, right_controller)
+		
+	# Transform camera
+	camera_transform_CB.call()
+	
+	# Apply relative transforms
+	apply_relative_transform(left_controller,  camera, left_relative)
+	apply_relative_transform(right_controller, camera, right_relative)
